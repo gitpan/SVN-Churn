@@ -1,12 +1,11 @@
 package SVN::Churn;
 use strict;
 use warnings;
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 use Chart::Strip;
 use Date::Parse qw( str2time );
 use List::Util qw( min max );
 use SVN::Log;
-use SVN::Ra;
 use Storable qw( nstore retrieve );
 use String::ShellQuote qw( shell_quote );
 use base qw( Class::Accessor::Fast );
@@ -58,8 +57,27 @@ sub load {
 
 sub head_revision {
     my $self = shift;
-    SVN::Ra->new(url => $self->path)->get_latest_revnum;
+    if (eval {
+        # load SVN::Core before SVN::Ra for future compatibility -- clkao
+        require SVN::Core;
+        require SVN::Ra;
+        1;
+    }) { # we have the bindings
+        return SVN::Ra->new(url => $self->path)->get_latest_revnum;
+    }
+    else {
+        my $path = shell_quote $self->path;
+        return $1
+          if `svn log -r HEAD $path` =~ m{^r(\d+) }m;
+        my ($parent, $chunk) = $self->path =~ m{(.*?/)([^/]+/?)$}
+          or die "couldn't guess what the parent was for ".$self->path;
+        $parent = shell_quote $parent;
+        `svn ls -v $parent` =~ m{^\s*(\d+).*? \Q$chunk\E$}m
+          or die "couldn't figure out head revision";
+        return $1;
+    }
 }
+
 
 sub start_at {
     my $self = shift;
@@ -136,6 +154,7 @@ sub graph {
             } );
     }
     open my $fh, ">$filename";
+    local $^W; # XXX lazy
     print $fh $chart->png;
 }
 

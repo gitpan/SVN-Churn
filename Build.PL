@@ -12,10 +12,12 @@ Module::Build->new(
         'List::Util'      => 0,
         'String::ShellQuote' => 0,
         'SVN::Log'    => 0,
-        'SVN::Core'   => 0,
     },
     build_requires => {
         'Test::More' => 0,
+    },
+    recommends => {
+        'SVN::Core'   => 0,
     },
     script_files  => [qw( bin/svn-churn )],
     create_makefile_pl => 'traditional',
